@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importador de Planilhas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f7f6;
+        }
+        .container {
+            max-width: 900px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .upload-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        /* Estilização da Tabela de Dados */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            display: none; /* Fica escondida até ter dados */
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Importar Estoque de Produtos</h2>
+    
+    <div class="upload-section">
+        <input type="file" id="seu-input-de-arquivo" accept=".xlsx, .xls, .csv">
+        <button id="seu-botao-importar" type="button">Importar Planilha</button>
+    </div>
+
+    <table id="tabela-produtos">
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Quantidade</th>
+                <th>Valor Unitário</th>
+            </tr>
+        </thead>
+        <tbody id="corpo-tabela">
+            </tbody>
+    </table>
+</div>
+
+<script>
+// Função que envia o arquivo para o Java
+async function enviarPlanilha(arquivo) {
+    const formData = new FormData();
+    formData.append('arquivo', arquivo); 
+    formData.append('file', arquivo); 
+
+    const response = await fetch('http://localhost:8080/api/planilha/importar', {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const txtErro = await response.text();
+        throw new Error(txtErro || 'Erro desconhecido no servidor.');
+    }
+
+    return await response.json(); // Retorna a lista de produtos vinda do Java
+}
+
+// Função responsável por desenhar as linhas na tabela da tela
+function exibirDadosNaTela(produtos) {
+    const tabela = document.getElementById('tabela-produtos');
+    const corpoTabela = document.getElementById('corpo-tabela');
+    
+    // Limpa dados de importações anteriores
+    corpoTabela.innerHTML = '';
+
+    if (produtos.length === 0) {
+        alert("Nenhum produto foi processado.");
+        return;
+    }
+
+    // Percorre a lista de produtos recebida do Java
+    produtos.forEach(produto => {
+        // Cria uma nova linha (tr)
+        const linha = document.createElement('tr');
+
+        // Formata o valor para o padrão de moeda do Brasil
+        const valorFormatado = produto.valor ? produto.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+
+        // Preenche as colunas (td)
+        linha.innerHTML = `
+            <td>${produto.codigo || '-'}</td>
+            <td>${produto.descricao || '-'}</td>
+            <td>${produto.quantidade || 0}</td>
+            <td>${valorFormatado}</td>
+        `;
+
+        // Adiciona a linha dentro do corpo da tabela
+        corpoTabela.appendChild(linha);
+    });
+
+    // Torna a tabela visível na tela
+    tabela.style.display = 'table';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const botao = document.getElementById('seu-botao-importar');
+    const fileInput = document.getElementById('seu-input-de-arquivo'); 
+
+    if (!botao || !fileInput) {
+        console.error("Erro: Elementos HTML não encontrados.");
+        return;
+    }
+
+    botao.addEventListener('click', async () => {
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert("Por favor, selecione um arquivo antes de enviar.");
+            return;
+        }
+
+        try {
+            // 1. Envia ao backend e aguarda o JSON de resposta
+            const produtos = await enviarPlanilha(fileInput.files[0]);
+            console.log("Produtos recebidos do Java:", produtos);
+            
+            // 2. CHAMA A FUNÇÃO PARA EXIBIR NA TELA
+            exibirDadosNaTela(produtos);
+            
+            alert("Planilha processada e exibida com sucesso!");
+        } catch (error) {
+            console.error("Erro capturado:", error);
+            alert("Erro no servidor: " + error.message);
+        }
+    });
+});
+</script>
+
+</body>
+</html>
